@@ -1,0 +1,25 @@
+ZerdeAI work log — 2026-11-10
+
+Project source: extracted to work/ZerdeAI_Project from the supplied ZIP.
+Data safety: all Java tests were run against the supplied EduTestSuite.jar; SuiteTest uses temporary H2 data and reported "H2 survives restart". No test accessed %USERPROFILE%/EduTestSuite2.
+
+Changes
+- Added persistent light/dark theme and reduce-motion preferences to web/app.js.
+- Added short page/card/button transitions, dark theme tokens, offline status styles, and prefers-reduced-motion support to web/style.css.
+- Updated web/index.html accessibility metadata and status live region.
+- Replaced those three web resources in EduTestSuite.jar using scripts/replace-web-assets.ps1. Java sources and existing app functions/data model were preserved.
+- Updated scripts/build.ps1 to use JAVA_HOME/system javac and jar when available and to report the missing JDK modules clearly.
+- Added Install-ZerdeAI.ps1 and scripts/uninstall.ps1 with current-user install/update/launch/uninstall flows, Start-menu registration, and an optional separately confirmed user-data deletion checkbox.
+- Added H2-backed private chats with group-based access, idempotent retry and read status; added published group courses, JSON sections/lessons and persisted lesson completion; added a collapsible per-user AI tutor with server-side answer-request screening and history deletion.
+- Added backup/restore reference validation for new chat, course, progress and tutor records.
+- Added scripts/SetupBootstrap.cs and an embedded-payload self-extracting setup flow. The generated ZerdeAI_Setup.exe uses this bootstrap because IExpress UI failed with `Unable to open the Report file`; the IExpress attempt is not recorded as a successful build.
+- Added SUPABASE_MIGRATION_RU.md with current Free limits, server-only architecture, backup/dry-run/import/reconciliation steps. No cloud project, credentials, adapter, or live database migration were configured.
+
+Checks
+- Node.js syntax check: web/app.js passed.
+- PowerShell parser: Install-ZerdeAI.ps1, scripts/uninstall.ps1, scripts/build.ps1, scripts/replace-web-assets.ps1, and scripts/build-installer.ps1 passed.
+- SuiteTest: 43 checks passed, including temporary H2 restart and backup/restore checks.
+- Full source compilation succeeded with JDK 17. The current complete test run passed 102 checks/scenarios: SuiteTest 43, HttpTest 8, PersistenceTest 21, GoogleLinkTest 16 with mocked provider, TunnelTest 11 with controlled child processes, and LaunchTest 3.
+- Persistence tests verify chat access boundaries, no teacher contacts before group assignment and the owning teacher after assignment, duplicate-free retry, group course visibility, tutor refusal for direct/spaced answer requests, backup/restore of the new record types and H2 records after a server restart. No production/user database was accessed.
+- IExpress was reopened and tried through Computer Use; it failed to open the output `.RPT`. The alternative Setup EXE was compiled with .NET Framework C# compiler and embeds the installer script and payload. Its binary/resources were generated but installation, update, launch and uninstall were not exercised.
+- Real Supabase write/read/restart test is not possible without an owner-provided project and trusted server configuration.

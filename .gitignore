@@ -1,0 +1,12 @@
+build/
+/outputs/
+*.next.jar
+*.log
+*.mv.db
+*.trace.db
+.env
+.env.*
+!.env.example
+data/
+ai-settings*
+*.key

@@ -1,0 +1,1 @@
+Recovered with Vineflower 1.11.2; CFR 0.152 used for comparison. Corrected 14 generic/type diagnostics and 3 lambda-capture diagnostics. Original SafeLaunch.java restored from its source. All 24 source files compile for Java 17. Windows GUI and packaging scripts require local validation.
