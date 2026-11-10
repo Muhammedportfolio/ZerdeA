@@ -100,6 +100,9 @@ button:active{transform:none}
 .source blockquote{margin:8px 0 0;padding:0;border:0;color:inherit;white-space:pre-wrap}
 .aside nav{scrollbar-width:none;-ms-overflow-style:none}
 .aside nav::-webkit-scrollbar{display:none}
+.human-chat{grid-template-rows:minmax(0,1fr)}
+.chat-inbox,.chat-conversation{min-height:0}
+.chat-composer{flex:0 0 auto}
 .notice{background:var(--notice-bg);color:var(--notice-ink)}
 textarea.code{background:var(--code-bg);color:var(--code-ink)}
 .result-question{border-left-width:4px}
