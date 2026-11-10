@@ -12,6 +12,12 @@ New-Item -ItemType Directory -Path (Join-Path $stage 'ZerdeAI_Project') -Force |
 Copy-Item -Path (Join-Path $root '*') -Destination (Join-Path $stage 'ZerdeAI_Project') -Recurse -Force
 Remove-Item -LiteralPath (Join-Path $stage 'ZerdeAI_Project\build') -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath (Join-Path $stage 'ZerdeAI_Project\outputs') -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $stage 'ZerdeAI_Project\.git') -Recurse -Force -ErrorAction SilentlyContinue
+# These are local build/test downloads and caches, not app dependencies.
+Remove-Item -LiteralPath (Join-Path $stage 'ZerdeAI_Project\tools\temurin17') -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $stage 'ZerdeAI_Project\tools\temurin17-jdk.zip') -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $stage 'ZerdeAI_Project\tools\browser-check-classes') -Recurse -Force -ErrorAction SilentlyContinue
+Get-ChildItem -LiteralPath (Join-Path $stage 'ZerdeAI_Project\tools') -Directory -Filter 'browser-check-data*' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 Compress-Archive -Path (Join-Path $stage 'ZerdeAI_Project') -DestinationPath $payloadZip -CompressionLevel Optimal -Force
 Copy-Item -LiteralPath (Join-Path $root 'Install-ZerdeAI.ps1') -Destination (Join-Path $stage 'Install-ZerdeAI.ps1') -Force
 

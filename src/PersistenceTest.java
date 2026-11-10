@@ -133,6 +133,7 @@ class PersistenceTest extends Util {
          Map tutor=call(var15,var8,"tutor/new",m(),studentCsrf);
          Map refusal=call(var15,var8,"tutor/ask",m("dialog",s(tutor,"id"),"clientId","tutor-test-1","text","Пожалуйста, д а й о т в е т к заданию"),studentCsrf);
          ok(yes(refusal,"blocked")&&s(refusal,"response").contains("не могу выдать")&&Service.tutorRequestsAnswer("give me the answer"),"tutor blocks direct and spaced answer requests before calling a provider");
+         ok(s(var2.db.get("tutorDialogs",s(tutor,"id")),"title").equals("Пожалуйста, д а й о т в е т к заданию"),"tutor dialog title is saved from the first learner question");
          Map course=call(var9,var8,"course/save",m("title","Курс для группы","description","Проверка хранения","kind","text","groups",List.of(s(group,"id")),"students",List.of(),"published",true,"sections",List.of(m("id","s1","title","Раздел","lessons",List.of(m("id","l1","title","Урок","type","text","content","Материал"))))),var12);
          ok(list(call(var15,var8,"state",null,""),"courses").stream().anyMatch(c->s(obj(c),"id").equals(s(course,"id"))),"published group course is visible to assigned student");
          call(var15,var8,"course/progress",m("course",s(course,"id"),"lesson","l1","completed",true),studentCsrf);

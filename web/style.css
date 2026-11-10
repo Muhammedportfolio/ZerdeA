@@ -98,6 +98,8 @@ button:active{transform:none}
 @media(prefers-reduced-motion:reduce){.chat-messages{scroll-behavior:auto}}
 .source a{color:var(--source-border);text-decoration:underline;text-underline-offset:2px}
 .source blockquote{margin:8px 0 0;padding:0;border:0;color:inherit;white-space:pre-wrap}
+.aside nav{scrollbar-width:none;-ms-overflow-style:none}
+.aside nav::-webkit-scrollbar{display:none}
 .notice{background:var(--notice-bg);color:var(--notice-ink)}
 textarea.code{background:var(--code-bg);color:var(--code-ink)}
 .result-question{border-left-width:4px}
