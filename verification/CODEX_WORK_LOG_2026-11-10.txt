@@ -23,3 +23,12 @@ Checks
 - Persistence tests verify chat access boundaries, no teacher contacts before group assignment and the owning teacher after assignment, duplicate-free retry, group course visibility, tutor refusal for direct/spaced answer requests, backup/restore of the new record types and H2 records after a server restart. No production/user database was accessed.
 - IExpress was reopened and tried through Computer Use; it failed to open the output `.RPT`. The alternative Setup EXE was compiled with .NET Framework C# compiler and embeds the installer script and payload. Its binary/resources were generated but installation, update, launch and uninstall were not exercised.
 - Real Supabase write/read/restart test is not possible without an owner-provided project and trusted server configuration.
+
+Final update 2.2.1 — 2026-11-10
+- Human chat now uses each participant's saved profile avatar in the conversation list and header. The message list scrolls independently and the composer remains visible.
+- Non-profile UI uses a two-part display name; Personal Information retains the full name.
+- AI tutor history uses the first question as each dialog title and orders questions before their answers, including equal timestamp cases.
+- Hid the sidebar navigation scrollbar while preserving scrolling, so it no longer paints over the account menu.
+- Updated build packaging to exclude local JDK/test caches from the installer payload. The setup registry version is 2.2.1.
+- Final tests: SuiteTest 43, HttpTest 8, PersistenceTest 33, GoogleLinkTest 16, TunnelTest 11 (111 assertions total) and LaunchTest (3 launch scenarios). JavaScript syntax and `git diff --check` passed; the full source build and Setup EXE generation succeeded.
+- The full Windows install/update/uninstall lifecycle is still not independently verified. User account data was not opened by automated tests.
