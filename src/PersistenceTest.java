@@ -63,6 +63,7 @@ class PersistenceTest extends Util {
          Map var7 = var2.db.get("users", "teacher-main");
          var7.put("salt", var4);
          var7.put("hash", hash(var3, var4));
+         var7.put("avatar", "data:image/png;base64,VEFDSEVS");
          var2.db.put("users", var7);
          String var8 = "http://127.0.0.1:" + var2.http.getAddress().getPort();
          HttpClient var9 = client();
@@ -73,6 +74,7 @@ class PersistenceTest extends Util {
          ok(!var12.equals(var13), "independent browser sessions");
          Map var14 = call(var9, var8, "users/save", m("login", "Тестов", "name", "Тестов Студент", "password", "student-test-123", "active", true), var12);
          var5 = s(var14, "id");
+         Map studentUser=var2.db.get("users",var5);studentUser.put("avatar","data:image/png;base64,U1RVREVOVA==");var2.db.put("users",studentUser);
          ok(list(call(var10, var8, "state", null, ""), "users").size() == 1, "student created on client A visible on client B");
          HttpClient ungroupedStudent=client();
          String ungroupedCsrf=s(call(ungroupedStudent,var8,"login",m("role","student","login","Тестов","password","student-test-123"),""),"csrf");
@@ -86,6 +88,10 @@ class PersistenceTest extends Util {
          ok(list(var16, "users").isEmpty() && !var16.containsKey("network"), "student cannot see teacher directory or network details");
          ok(list(var16,"availableTeachers").size()==1&&s(obj(list(var16,"availableTeachers").get(0)),"id").equals("teacher-main"),"assigned student can select the teacher who owns the group");
          Map chat=call(var15,var8,"chat/open",m("teacher","teacher-main"),studentCsrf);
+         Map studentChatState=call(var15,var8,"state",null,"");Map studentPeer=obj(obj(list(studentChatState,"chats").get(0)).get("peer"));
+         ok(s(studentPeer,"avatar").equals("data:image/png;base64,VEFDSEVS"),"student chat state includes the teacher profile photo");
+         Map teacherChatState=call(var9,var8,"state",null,"");Map teacherPeer=obj(obj(list(teacherChatState,"chats").get(0)).get("peer"));
+         ok(s(teacherPeer,"avatar").equals("data:image/png;base64,U1RVREVOVA=="),"teacher chat state includes the student profile photo");
          Map sent=call(var15,var8,"chat/send",m("chat",s(chat,"id"),"clientId","retry-1","text","Сохранённое сообщение"),studentCsrf);
          Map sentAgain=call(var15,var8,"chat/send",m("chat",s(chat,"id"),"clientId","retry-1","text","Сохранённое сообщение"),studentCsrf);
          ok(s(sent,"id").equals(s(sentAgain,"id")) && list(call(var15,var8,"state",null,""),"chatMessages").size()==1,"chat retry is idempotent and isolated state contains the sent message");
