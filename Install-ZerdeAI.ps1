@@ -54,7 +54,7 @@ function Install-App {
     $quoted = '"' + $uninstaller + '"'
     New-Item -Path $registryPath -Force | Out-Null
     Set-ItemProperty $registryPath DisplayName 'Zerde AI'
-    Set-ItemProperty $registryPath DisplayVersion '2.2.1'
+    Set-ItemProperty $registryPath DisplayVersion '2.3.0'
     Set-ItemProperty $registryPath Publisher 'ZerdeAI'
     Set-ItemProperty $registryPath InstallLocation $script:installDir
     Set-ItemProperty $registryPath UninstallString ('"' + $powershell + '" -NoProfile -ExecutionPolicy Bypass -File ' + $quoted)

@@ -14,21 +14,82 @@ import java.util.Map;
 class Database extends Util implements AutoCloseable {
    final Connection c;
    final Path home;
+   final boolean postgres;
+   final String provider;
 
    Database(Path var1) throws Exception {
+      this(var1, false);
+   }
+
+   Database(Path var1, boolean forceH2) throws Exception {
       this.home = var1;
       Files.createDirectories(var1);
-      this.c = DriverManager.getConnection("jdbc:h2:" + var1.resolve("database").toAbsolutePath() + ";DB_CLOSE_ON_EXIT=FALSE", "sa", "");
+      String url = System.getenv("ZERDEAI_DB_URL");
+      String user = System.getenv("ZERDEAI_DB_USER");
+      String password = System.getenv("ZERDEAI_DB_PASSWORD");
+      boolean anyPostgresSetting = !forceH2 && ((url != null && !url.isBlank()) || (user != null && !user.isBlank()) || (password != null && !password.isEmpty()));
+      if (anyPostgresSetting) {
+         if (url == null || user == null || password == null || url.isBlank() || user.isBlank() || password.isEmpty()) {
+            throw new IllegalStateException("Для Supabase нужны все три настройки ZERDEAI_DB_URL, ZERDEAI_DB_USER и ZERDEAI_DB_PASSWORD. H2 автоматически не включён.");
+         }
+         if (!url.startsWith("jdbc:postgresql://") || !url.matches("(?i).*([?&])sslmode=verify-full(&.*)?$")) {
+            throw new IllegalStateException("Подключение PostgreSQL должно использовать jdbc:postgresql:// и sslmode=verify-full.");
+         }
+         Class.forName("org.postgresql.Driver");
+         this.postgres = true;
+         this.provider = "Supabase";
+         this.c = DriverManager.getConnection(url, user, password);
+         try (Statement statement = this.c.createStatement()) {
+            statement.executeQuery("SELECT kind,id,body FROM zerdeai.records LIMIT 0").close();
+         } catch (Exception exception) {
+            try { this.c.close(); } catch (Exception ignored) { }
+            throw new IllegalStateException("Supabase доступен, но закрытая таблица zerdeai.records не найдена или роль не имеет прав. Проверьте миграцию и роль подключения.", exception);
+         }
+      } else {
+         this.postgres = false;
+         this.provider = "H2";
+         this.c = DriverManager.getConnection("jdbc:h2:" + var1.resolve("database").toAbsolutePath() + ";DB_CLOSE_ON_EXIT=FALSE", "sa", "");
+         try (Statement var2 = this.c.createStatement()) {
+            var2.execute("CREATE TABLE IF NOT EXISTS records(kind VARCHAR(30), id VARCHAR(60), body CLOB NOT NULL, PRIMARY KEY(kind,id))");
+         }
+      }
+   }
 
-      try (Statement var2 = this.c.createStatement()) {
-         var2.execute("CREATE TABLE IF NOT EXISTS records(kind VARCHAR(30), id VARCHAR(60), body CLOB NOT NULL, PRIMARY KEY(kind,id))");
+   private String table() { return this.postgres ? "zerdeai.records" : "records"; }
+
+   synchronized List<Map<String, Object>> allRecords() throws Exception {
+      ArrayList<Map<String, Object>> rows = new ArrayList<>();
+      try (Statement statement = this.c.createStatement(); ResultSet result = statement.executeQuery(
+         "SELECT kind,id," + (this.postgres ? "body::text" : "body") + " FROM " + this.table() + " ORDER BY kind,id")) {
+         while (result.next()) {
+            Map<String, Object> body = obj(Json.parse(result.getString(3)));
+            check(s(body, "id").equals(result.getString(2)), "Идентификатор в JSON не совпадает со столбцом id");
+            rows.add(m("kind", result.getString(1), "id", result.getString(2), "body", body));
+         }
+      }
+      return rows;
+   }
+
+   synchronized void insertNewRecord(Map<String, Object> row) throws Exception {
+      String kind = req(row, "kind", 30);
+      String id = req(row, "id", 60);
+      Map<String, Object> body = obj(row.get("body"));
+      check(req(body, "id", 60).equals(id), "Идентификатор в JSON не совпадает со столбцом id");
+      String sql = this.postgres
+         ? "INSERT INTO zerdeai.records(kind,id,body) VALUES(?,?,?::jsonb)"
+         : "INSERT INTO records(kind,id,body) VALUES(?,?,?)";
+      try (PreparedStatement statement = this.c.prepareStatement(sql)) {
+         statement.setString(1, kind);
+         statement.setString(2, id);
+         statement.setString(3, Json.write(body));
+         statement.executeUpdate();
       }
    }
 
    synchronized List<Map<String, Object>> all(String var1) throws Exception {
       ArrayList var2 = new ArrayList();
 
-      try (PreparedStatement var3 = this.c.prepareStatement("SELECT body FROM records WHERE kind=? ORDER BY id")) {
+      try (PreparedStatement var3 = this.c.prepareStatement("SELECT " + (this.postgres ? "body::text" : "body") + " FROM " + this.table() + " WHERE kind=? ORDER BY id")) {
          var3.setString(1, var1);
 
          try (ResultSet var4 = var3.executeQuery()) {
@@ -42,7 +103,7 @@ class Database extends Util implements AutoCloseable {
    }
 
    synchronized Map<String, Object> get(String var1, String var2) throws Exception {
-      try (PreparedStatement var3 = this.c.prepareStatement("SELECT body FROM records WHERE kind=? AND id=?")) {
+      try (PreparedStatement var3 = this.c.prepareStatement("SELECT " + (this.postgres ? "body::text" : "body") + " FROM " + this.table() + " WHERE kind=? AND id=?")) {
          var3.setString(1, var1);
          var3.setString(2, var2);
 
@@ -57,7 +118,10 @@ class Database extends Util implements AutoCloseable {
    }
 
    synchronized void put(String var1, Map<String, Object> var2) throws Exception {
-      try (PreparedStatement var3 = this.c.prepareStatement("MERGE INTO records(kind,id,body) KEY(kind,id) VALUES(?,?,?)")) {
+      String sql = this.postgres
+         ? "INSERT INTO zerdeai.records(kind,id,body) VALUES(?,?,?::jsonb) ON CONFLICT(kind,id) DO UPDATE SET body=EXCLUDED.body"
+         : "MERGE INTO records(kind,id,body) KEY(kind,id) VALUES(?,?,?)";
+      try (PreparedStatement var3 = this.c.prepareStatement(sql)) {
          var3.setString(1, var1);
          var3.setString(2, req(var2, "id", 60));
          var3.setString(3, Json.write(var2));
@@ -66,7 +130,7 @@ class Database extends Util implements AutoCloseable {
    }
 
    synchronized void delete(String var1, String var2) throws Exception {
-      try (PreparedStatement var3 = this.c.prepareStatement("DELETE FROM records WHERE kind=? AND id=?")) {
+      try (PreparedStatement var3 = this.c.prepareStatement("DELETE FROM " + this.table() + " WHERE kind=? AND id=?")) {
          var3.setString(1, var1);
          var3.setString(2, var2);
          var3.executeUpdate();
@@ -179,7 +243,7 @@ class Database extends Util implements AutoCloseable {
 
       try {
          try (Statement var26 = this.c.createStatement()) {
-            var26.executeUpdate("DELETE FROM records");
+            var26.executeUpdate("DELETE FROM " + this.table());
          }
 
          for (String var32 : var2) {

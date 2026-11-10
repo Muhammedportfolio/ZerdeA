@@ -30,6 +30,10 @@ class Server extends Util {
 
    Server(Path var1, String var2, int var3) throws Exception {
       this.db = new Database(var1);
+      if (this.db.postgres && this.db.all("users").isEmpty()) {
+         this.db.close();
+         throw new IllegalStateException("База Supabase пока пуста. Сначала перенесите проверенную резервную копию H2; записи и учётные записи автоматически не создаются.");
+      }
       this.svc = new Service(this.db);
       this.google = new GoogleLink(this.svc.ai);
 
@@ -71,7 +75,7 @@ class Server extends Util {
          }
       }
 
-      return m("shared", var2, "addresses", var1, "database", "H2", "version", "2.2");
+      return m("shared", var2, "addresses", var1, "database", this.db.provider, "version", "2.3.0");
    }
 
    static String cookie(HttpExchange var0, String var1) {

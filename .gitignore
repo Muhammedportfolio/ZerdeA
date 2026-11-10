@@ -4,6 +4,7 @@ build/
 *.log
 *.mv.db
 *.trace.db
+*.migration-backup.json
 .env
 .env.*
 !.env.example

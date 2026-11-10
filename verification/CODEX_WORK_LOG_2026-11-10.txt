@@ -32,3 +32,22 @@ Final update 2.2.1 — 2026-11-10
 - Updated build packaging to exclude local JDK/test caches from the installer payload. The setup registry version is 2.2.1.
 - Final tests: SuiteTest 43, HttpTest 8, PersistenceTest 33, GoogleLinkTest 16, TunnelTest 11 (111 assertions total) and LaunchTest (3 launch scenarios). JavaScript syntax and `git diff --check` passed; the full source build and Setup EXE generation succeeded.
 - The full Windows install/update/uninstall lifecycle is still not independently verified. User account data was not opened by automated tests.
+
+Supabase Free update — 2026-11-10
+- Application/setup version advanced to 2.3.0 for the H2/Supabase storage option.
+- User approved a free project in the existing `zerde ai` organization. Project `zerdeai-shared` (`czptfdqewbweyyymjmzv`, `ap-south-1`) is active; the project cost check returned $0/month. No paid resources or add-ons were created.
+- Applied versioned migration `supabase/migrations/20261110172522_zerdeai_records.sql`: private JSONB table, forced RLS, no grants for `anon`/`authenticated`, server group role `zerdeai_backend`. Security, performance and health advisories returned no lints.
+- Verified a synthetic row was inserted, read back in a separate request, and deleted. Cloud table remains empty. This is a provider SQL round-trip, not a Java JDBC restart test.
+- Added PostgreSQL JDBC 42.7.14 and its license, a Java adapter for H2/PostgreSQL, TLS validation, role/table checks, fail-closed behavior, blank-cloud protection, teacher-visible DB mode, and `START_SUPABASE.ps1` with a hidden one-run password prompt. No credential is stored in source or packaged installer.
+- Added `SupabaseMigration.java` and a PowerShell wrapper. The exporter validates domain links, prints per-kind counts, preserves all H2 record kinds (including the separate local admin role), writes a new backup without overwriting, imports only to an empty destination with INSERT-only semantics, compares rows/counts, and checks again after a new JDBC connection.
+- Build succeeded with bundled JDK 17. Seven test programs passed: SuiteTest 43, HttpTest 8, PersistenceTest 33, GoogleLinkTest 16 (mocked), TunnelTest 11 (controlled child processes), SupabaseMigrationTest 4, LaunchTest 3 scenarios. This totals 115 assertions/checks plus three launch scenarios. JS syntax check and `git diff --check` passed.
+- Not completed/verified: creating the separate login role, Java-to-Supabase JDBC read/write across application restart, running the migration against the owner's H2 backup, Windows GUI launch with Supabase. These require the owner's runtime DB role credentials and verified backup. The project remains on H2 by default; do not switch an existing class to the empty cloud database.
+- Owner then explicitly requested migration from the PC and closed ZerdeAI normally. Created a local full-folder backup, verified the untouched H2 file SHA-256 against its raw copy, and ran the exporter on a separate validation copy. The domain graph passed validation.
+- Imported all H2 records into the previously empty Supabase table in small non-overwriting batches. Each batch was reread and compared by `(kind,id,body)`; final counts by kind and total matched the validated JSON backup, and attempt/chat links were intact. The untouched H2 hash still matches its raw local backup. Backups remain outside the source repository and packaged artifacts.
+- Still not verified: Java JDBC app connection/restart. The separate `zerdeai_app` login role/password has not been configured, so the installed app remains in H2 mode by default; no automatic switch occurs.
+
+Follow-up — 2026-11-11
+- Owner configured the Supabase server role locally and launched ZerdeAI with `START_SUPABASE.bat`; the application reached its login screen.
+- The user's PostgreSQL password remains local and is entered hidden at launch. It was not copied into the source tree, ZIP, Setup EXE, or GitHub content.
+- The H2-to-Supabase transfer remains backed up and reconciled as recorded above. The untouched H2 copy is preserved.
+- Not verified: full in-app write/read and read-after-application-restart through the JDBC connection, or the Windows installer lifecycle. Version 2.3.0 is therefore marked Beta.
