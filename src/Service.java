@@ -3,7 +3,13 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 class Service extends Util {
    final Database db;
@@ -258,15 +264,19 @@ class Service extends Util {
 
       ArrayList chats = new ArrayList();
       ArrayList chatMessages = new ArrayList();
+      ArrayList chatAttachments = new ArrayList();
+      HashSet visibleChatIds = new HashSet();
       for (Map chat : this.db.all("chats")) {
          if (s(chat, "teacher").equals(s(var1, "id")) || s(chat, "student").equals(s(var1, "id"))) {
             Map visible = copy(chat);
             Map peer = this.db.get("users", s(chat, var2 ? "student" : "teacher"));
             visible.put("peer", publicUser(peer));
             chats.add(visible);
+            visibleChatIds.add(s(chat,"id"));
             for (Map message : this.db.all("chatMessages")) if (s(message, "chat").equals(s(chat, "id"))) chatMessages.add(copy(message));
          }
       }
+      for(Map attachment:this.db.all("chatAttachments")) if(visibleChatIds.contains(s(attachment,"chat"))) chatAttachments.add(chatAttachmentPublic(attachment));
       ArrayList courses = new ArrayList();
       for (Map course : this.db.all("courses")) if (this.courseAvailable(var1, course)) courses.add(this.coursePublic(var1, course));
       ArrayList tutorDialogs = new ArrayList();
@@ -274,9 +284,13 @@ class Service extends Util {
       ArrayList tutorMessages = new ArrayList();
       for (Map message : this.db.all("tutorMessages")) if (s(message, "user").equals(s(var1, "id"))) tutorMessages.add(copy(message));
 
+      Map stateUser=publicUser(var1);
+      String groupId=s(var1,"group");
+      if(!groupId.isBlank()) for(Map group:this.db.all("groups")) if(s(group,"id").equals(groupId)){stateUser.put("groupName",s(group,"name"));break;}
+
       return m(
          "user",
-         publicUser(var1),
+         stateUser,
          "tasks",
          var3,
          "materials",
@@ -289,6 +303,7 @@ class Service extends Util {
          var7,
          "chats", chats,
          "chatMessages", chatMessages,
+         "chatAttachments", chatAttachments,
          "availableTeachers", var2 ? new ArrayList() : this.availableTeachers(var1),
          "courses", courses,
          "courseProgress", this.userCourseProgress(var1),
@@ -324,12 +339,75 @@ class Service extends Util {
    synchronized Map<String,Object> chatSend(Map<String,Object> user, Map<String,Object> data) throws Exception {
       Map chat=this.db.get("chats",req(data,"chat",100));
       check(s(chat,"teacher").equals(s(user,"id")) || s(chat,"student").equals(s(user,"id")),"Нет доступа к этому диалогу");
-      String text=req(data,"text",4000).trim(); check(!text.isEmpty(),"Введите сообщение");
+      String text=s(data,"text").strip(); check(text.length()<=4000,"Сообщение слишком длинное");
       String clientId=req(data,"clientId",80);
-      for(Map old:this.db.all("chatMessages")) if(s(old,"chat").equals(s(chat,"id")) && s(old,"from").equals(s(user,"id")) && s(old,"clientId").equals(clientId)) return copy(old);
+      ArrayList attachmentIds=new ArrayList();
+      for(Object value:list(data,"attachments")){
+         check(attachmentIds.size()<5,"К одному сообщению можно прикрепить не больше 5 файлов");
+         String attachmentId=String.valueOf(value); Map attachment=this.db.get("chatAttachments",req(m("id",attachmentId),"id",60));
+         check(s(attachment,"chat").equals(s(chat,"id"))&&s(attachment,"from").equals(s(user,"id")),"Это вложение нельзя отправить в выбранный диалог");
+         if(!attachmentIds.contains(attachmentId))attachmentIds.add(attachmentId);
+      }
+      check(!text.isEmpty()||!attachmentIds.isEmpty(),"Напишите сообщение или прикрепите файл");
+      for(Map old:this.db.all("chatMessages")) if(s(old,"chat").equals(s(chat,"id")) && s(old,"from").equals(s(user,"id")) && s(old,"clientId").equals(clientId)){
+         check(s(old,"text").equals(text)&&list(old,"attachments").equals(attachmentIds),"Эта отправка уже сохранена. Обновите переписку.");
+         return copy(old);
+      }
       String id=id();
-      Map message=m("id",id,"chat",s(chat,"id"),"clientId",clientId,"from",s(user,"id"),"text",text,"created",now(),"readBy",List.of(s(user,"id")));
+      Map message=m("id",id,"chat",s(chat,"id"),"clientId",clientId,"from",s(user,"id"),"text",text,"attachments",attachmentIds,"created",now(),"readBy",List.of(s(user,"id")));
       this.db.put("chatMessages",message); return message;
+   }
+
+   synchronized Map<String,Object> chatAttachmentUpload(Map<String,Object> user,Map<String,Object> data)throws Exception{
+      Map chat=this.db.get("chats",req(data,"chat",60));
+      check(s(chat,"teacher").equals(s(user,"id"))||s(chat,"student").equals(s(user,"id")),"Нет доступа к этому диалогу");
+      String filename=req(data,"filename",255);
+      check(!filename.contains("/")&&!filename.contains("\\")&&filename.chars().noneMatch(Character::isISOControl),"Имя файла содержит недопустимые символы");
+      int dot=filename.lastIndexOf('.'); check(dot>0&&dot<filename.length()-1,"У файла нет расширения");
+      String extension=filename.substring(dot).toLowerCase(Locale.ROOT);
+      String contentType=switch(extension){
+         case ".png"->"image/png";case ".jpg",".jpeg"->"image/jpeg";case ".gif"->"image/gif";case ".webp"->"image/webp";
+         case ".pdf"->"application/pdf";case ".docx"->"application/vnd.openxmlformats-officedocument.wordprocessingml.document";case ".zip"->"application/zip";
+         case ".txt",".java",".cpp",".cc",".cxx",".h",".hpp",".py"->"text/plain; charset=utf-8";
+         default->throw new IllegalArgumentException("Этот тип файла нельзя отправить в чате");
+      };
+      byte[] bytes;
+      try{bytes=Base64.getDecoder().decode(req(data,"data",14000000));}catch(IllegalArgumentException error){throw new IllegalArgumentException("Не удалось прочитать содержимое файла");}
+      check(bytes.length>0&&bytes.length<=10*1024*1024,"Размер файла должен быть не больше 10 МБ");
+      check(validChatAttachment(extension,bytes),"Содержимое файла не соответствует его расширению или кодировке");
+      String uploadId=req(data,"clientId",100),sha=java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+      for(Map old:this.db.all("chatAttachments"))if(s(old,"chat").equals(s(chat,"id"))&&s(old,"from").equals(s(user,"id"))&&s(old,"clientId").equals(uploadId)){
+         check(s(old,"sha256").equals(sha)&&s(old,"filename").equals(filename),"Идентификатор загрузки уже использован для другого файла");
+         return chatAttachmentPublic(old);
+      }
+      Map attachment=m("id",id(),"chat",s(chat,"id"),"from",s(user,"id"),"clientId",uploadId,"filename",filename,"type",contentType,"size",bytes.length,"sha256",sha,"data",Base64.getEncoder().encodeToString(bytes),"created",now());
+      this.db.put("chatAttachments",attachment);return chatAttachmentPublic(attachment);
+   }
+
+   synchronized Map<String,Object> chatAttachmentDownload(Map<String,Object> user,Map<String,Object> data)throws Exception{
+      Map attachment=this.db.get("chatAttachments",req(data,"id",60));
+      Map chat=this.db.get("chats",s(attachment,"chat"));
+      check(s(chat,"teacher").equals(s(user,"id"))||s(chat,"student").equals(s(user,"id")),"Нет доступа к этому вложению");
+      return m("filename",s(attachment,"filename"),"type",s(attachment,"type"),"size",n(attachment.get("size")),"data",s(attachment,"data"));
+   }
+
+   static Map<String,Object> chatAttachmentPublic(Map<String,Object> attachment){
+      return m("id",s(attachment,"id"),"chat",s(attachment,"chat"),"from",s(attachment,"from"),"filename",s(attachment,"filename"),"type",s(attachment,"type"),"size",n(attachment.get("size")),"created",lng(attachment.get("created")));
+   }
+
+   static boolean validChatAttachment(String extension,byte[] bytes){
+      if(extension.equals(".png"))return bytes.length>=8&&bytes[0]==(byte)0x89&&bytes[1]=='P'&&bytes[2]=='N'&&bytes[3]=='G';
+      if(extension.equals(".jpg")||extension.equals(".jpeg"))return bytes.length>=3&&(bytes[0]&255)==0xff&&(bytes[1]&255)==0xd8&&(bytes[2]&255)==0xff;
+      if(extension.equals(".gif"))return bytes.length>=6&&(new String(bytes,0,6,StandardCharsets.US_ASCII).equals("GIF87a")||new String(bytes,0,6,StandardCharsets.US_ASCII).equals("GIF89a"));
+      if(extension.equals(".webp"))return bytes.length>=12&&new String(bytes,0,4,StandardCharsets.US_ASCII).equals("RIFF")&&new String(bytes,8,4,StandardCharsets.US_ASCII).equals("WEBP");
+      if(extension.equals(".pdf"))return bytes.length>=5&&new String(bytes,0,5,StandardCharsets.US_ASCII).equals("%PDF-");
+      if(extension.equals(".zip")||extension.equals(".docx"))return bytes.length>=4&&bytes[0]=='P'&&bytes[1]=='K'&&(bytes[2]==3||bytes[2]==5||bytes[2]==7)&&(bytes[3]==4||bytes[3]==6||bytes[3]==8);
+      if(List.of(".txt",".java",".cpp",".cc",".cxx",".h",".hpp",".py").contains(extension)){
+         for(byte value:bytes)if(value==0)return false;
+         try{StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes));return true;}
+         catch(CharacterCodingException error){return false;}
+      }
+      return false;
    }
 
    synchronized Map<String,Object> chatRead(Map<String,Object> user, Map<String,Object> data) throws Exception {

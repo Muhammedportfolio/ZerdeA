@@ -226,6 +226,8 @@ class Server extends Util {
             case "/api/chat/open" -> this.svc.chatOpen(var9, var6);
             case "/api/chat/send" -> this.svc.chatSend(var9, var6);
             case "/api/chat/read" -> this.svc.chatRead(var9, var6);
+            case "/api/chat/attachment/upload" -> this.svc.chatAttachmentUpload(var9, var6);
+            case "/api/chat/attachment/download" -> this.svc.chatAttachmentDownload(var9, var6);
             case "/api/course/save" -> this.svc.courseSave(var9, var6);
             case "/api/course/progress" -> this.svc.courseProgress(var9, var6);
             case "/api/tutor/new" -> this.svc.tutorNew(var9);

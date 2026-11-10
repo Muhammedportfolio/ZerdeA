@@ -76,7 +76,7 @@ class Database extends Util implements AutoCloseable {
    synchronized Map<String, Object> backup() throws Exception {
       Map var1 = m("format", "EduTestSuite-2", "created", now());
 
-      for (String var3 : List.of("users", "groups", "materials", "tasks", "attempts", "audit", "chats", "chatMessages", "courses", "courseProgress", "tutorDialogs", "tutorMessages")) {
+      for (String var3 : List.of("users", "groups", "materials", "tasks", "attempts", "audit", "chats", "chatMessages", "chatAttachments", "courses", "courseProgress", "tutorDialogs", "tutorMessages")) {
          var1.put(var3, this.all(var3));
       }
 
@@ -85,7 +85,7 @@ class Database extends Util implements AutoCloseable {
 
    synchronized void restore(Map<String, Object> var1) throws Exception {
       check(s(var1, "format").equals("EduTestSuite-2"), "Это не резервная копия EduTest Suite 2");
-      List<String> var2 = List.of("users", "groups", "materials", "tasks", "attempts", "audit", "chats", "chatMessages", "courses", "courseProgress", "tutorDialogs", "tutorMessages");
+      List<String> var2 = List.of("users", "groups", "materials", "tasks", "attempts", "audit", "chats", "chatMessages", "chatAttachments", "courses", "courseProgress", "tutorDialogs", "tutorMessages");
 
       for (String var4 : var2) {
          HashSet var5 = new HashSet();
@@ -136,7 +136,7 @@ class Database extends Util implements AutoCloseable {
          check(var19.contains(s(var35, "user")) && var19.contains(s(var35, "owner")) && var21.contains(s(var35, "task")), "Нарушены связи попыток в копии");
       }
 
-      HashSet courseIds=new HashSet(), chatIds=new HashSet();
+      HashSet courseIds=new HashSet(), chatIds=new HashSet(), attachmentIds=new HashSet();
       for(Object value:list(var1,"courses")) {
          Map course=obj(value); String owner=req(course,"owner",60); check(var19.contains(owner),"Нет владельца курса в копии");
          for(Object group:list(course,"groups")) check(var20.contains(String.valueOf(group)),"Курс назначен отсутствующей группе");
@@ -154,6 +154,22 @@ class Database extends Util implements AutoCloseable {
          Map msg=obj(value); check(chatIds.contains(s(msg,"chat")),"Сообщение ссылается на отсутствующий диалог");
          Map chat=obj(list(var1,"chats").stream().filter(c->s(obj(c),"id").equals(s(msg,"chat"))).findFirst().orElseThrow());
          check(s(msg,"from").equals(s(chat,"teacher"))||s(msg,"from").equals(s(chat,"student")),"Отправитель сообщения не состоит в диалоге");
+      }
+      for(Object value:list(var1,"chatAttachments")){
+         Map attachment=obj(value); String chatId=req(attachment,"chat",60), owner=req(attachment,"from",60);
+         check(chatIds.contains(chatId)&&var19.contains(owner),"Вложение ссылается на отсутствующий диалог или пользователя");
+         Map chat=obj(list(var1,"chats").stream().filter(c->s(obj(c),"id").equals(chatId)).findFirst().orElseThrow());
+         check(owner.equals(s(chat,"teacher"))||owner.equals(s(chat,"student")),"Вложение принадлежит постороннему пользователю");
+         attachmentIds.add(req(attachment,"id",60));
+      }
+      for(Object value:list(var1,"chatMessages")){
+         Map msg=obj(value);
+         for(Object attachmentId:list(msg,"attachments")){
+            String id=String.valueOf(attachmentId);
+            check(attachmentIds.contains(id),"Сообщение ссылается на отсутствующее вложение");
+            Map attachment=obj(list(var1,"chatAttachments").stream().filter(a->s(obj(a),"id").equals(id)).findFirst().orElseThrow());
+            check(s(attachment,"chat").equals(s(msg,"chat"))&&s(attachment,"from").equals(s(msg,"from")),"Вложение прикреплено к чужому сообщению");
+         }
       }
       for(Object value:list(var1,"courseProgress")){Map p=obj(value);check(var19.contains(s(p,"user"))&&courseIds.contains(s(p,"course")),"Прогресс ссылается на отсутствующего пользователя или курс");}
       HashSet dialogIds=new HashSet(); for(Object value:list(var1,"tutorDialogs")){Map d=obj(value);check(var19.contains(s(d,"user")),"Диалог тьютора ссылается на отсутствующего пользователя");dialogIds.add(s(d,"id"));}

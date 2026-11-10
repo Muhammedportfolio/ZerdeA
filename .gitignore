@@ -10,3 +10,7 @@ build/
 data/
 ai-settings*
 *.key
+/tools/temurin17/
+/tools/temurin17-jdk.zip
+/tools/browser-check-classes/
+/tools/browser-check-data*/
